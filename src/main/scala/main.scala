@@ -1,226 +1,164 @@
-object HangmanGame {
+// Main.scala
+// This is the entry point of the game with menu system
 
-  val RESET = "\u001B[0m"
-  val RED = "\u001B[31m"
-  val GREEN = "\u001B[32m"
-  val YELLOW = "\u001B[33m"
-  val BLUE = "\u001B[34m"
-  val CYAN = "\u001B[36m"
+object Main {
+  
+  import GameEngine._
 
-  // Game state case class
-  case class GameState(
-                        word: String,
-                        guessedLetters: Set[Char],
-                        remainingAttempts: Int,
-                        maxAttempts: Int = 6
-                      ) {
-
-    // Get the current display of the word (with underscores for unguessed letters)
-    def getWordDisplay: String = {
-      word.map(c => if (guessedLetters.contains(c.toLower)) c else '_').mkString(" ")
-    }
-
-    // Check if the word is completely guessed
-    def isWordGuessed: Boolean = {
-      word.toLowerCase.forall(c => guessedLetters.contains(c))
-    }
-
-    // Check if game is lost
-    def isGameLost: Boolean = remainingAttempts <= 0
-
-    // Check if game is over
-    def isGameOver: Boolean = isWordGuessed || isGameLost
-
-    // Get incorrect guesses
-    def getIncorrectGuesses: Set[Char] = {
-      guessedLetters.filterNot(c => word.toLowerCase.contains(c))
-    }
-  }
-
-  def getHangmanArt(incorrectGuesses: Int): String = {
-    val stages = Array(
-      """
-        |   +---+
-        |   |   |
-        |       |
-        |       |
-        |       |
-        |       |
-        | =========""",
-
-      """
-        |   +---+
-        |   |   |
-        |   O   |
-        |       |
-        |       |
-        |       |
-        | =========""",
-
-      """
-        |   +---+
-        |   |   |
-        |   O   |
-        |   |   |
-        |       |
-        |       |
-        | =========""",
-
-      """
-        |   +---+
-        |   |   |
-        |   O   |
-        |  /|   |
-        |       |
-        |       |
-        | =========""",
-
-      """
-        |   +---+
-        |   |   |
-        |   O   |
-        |  /|\  |
-        |       |
-        |       |
-        | =========""",
-
-      """
-        |   +---+
-        |   |   |
-        |   O   |
-        |  /|\  |
-        |  /    |
-        |       |
-        | =========""",
-
-      """
-        |   +---+
-        |   |   |
-        |   O   |
-        |  /|\  |
-        |  / \  |
-        |       |
-        | =========""",
-    )
-
-    if (incorrectGuesses >= 0 && incorrectGuesses < stages.length) {
-      stages(incorrectGuesses)
-    } else {
-      stages.last
-    }
-  }
-
-  // Display the current game state
-  def displayGameState(state: GameState): Unit = {
+  // Display the main menu
+  def displayMainMenu(): Unit = {
     println("\n" + "="*50)
-    println(s"${CYAN}HANGMAN GAME${RESET}")
+    println(s"${BLUE}╔═══════════════════════════════════════╗${RESET}")
+    println(s"${BLUE}║          WELCOME TO HANGMAN!          ║${RESET}")
+    println(s"${BLUE}╚═══════════════════════════════════════╝${RESET}")
     println("="*50)
-
-    // Display hangman
-    println(s"${RED}${getHangmanArt(state.getIncorrectGuesses.size)}${RESET}")
-
-    // Display word status
-    println(s"\n${YELLOW}Word: ${state.getWordDisplay}${RESET}")
-
-    // Display guessed letters
-    if (state.guessedLetters.nonEmpty) {
-      println(s"${BLUE}Guessed letters: ${state.guessedLetters.toList.sorted.mkString(", ")}${RESET}")
-    }
-
-    // Display remaining attempts
-    println(s"${GREEN}Remaining attempts: ${state.remainingAttempts}${RESET}")
-    println("="*50 + "\n")
+    println(s"${CYAN}1.${RESET} Start New Game")
+    println(s"${CYAN}2.${RESET} Continue Saved Game")
+    println(s"${CYAN}3.${RESET} View Scoreboard")
+    println(s"${CYAN}4.${RESET} Exit")
+    println("="*50)
   }
 
-  // Validate and process a guess
-  def processGuess(state: GameState, guess: Char): (GameState, String) = {
-    val lowerGuess = guess.toLower
+  // Display game mode selection menu
+  def displayGameModeMenu(): Unit = {
+    println("\n" + "="*50)
+    println(s"${YELLOW}SELECT GAME MODE${RESET}")
+    println("="*50)
+    println(s"${CYAN}1.${RESET} Single Player (vs Computer)")
+    println(s"${CYAN}2.${RESET} Multiplayer (Player 1 vs Player 2)")
+    println(s"${CYAN}3.${RESET} Back to Main Menu")
+    println("="*50)
+  }
 
-    // Check if already guessed
-    if (state.guessedLetters.contains(lowerGuess)) {
-      return (state, s"${YELLOW}You already guessed '$guess'. Try a different letter.${RESET}")
-    }
-
-    // Add to guessed letters
-    val newGuessedLetters = state.guessedLetters + lowerGuess
-
-    // Check if guess is correct
-    if (state.word.toLowerCase.contains(lowerGuess)) {
-      val newState = state.copy(guessedLetters = newGuessedLetters)
-      (newState, s"${GREEN}Correct! '$guess' is in the word.${RESET}")
-    } else {
-      val newState = state.copy(
-        guessedLetters = newGuessedLetters,
-        remainingAttempts = state.remainingAttempts - 1
-      )
-      (newState, s"${RED}Wrong! '$guess' is not in the word.${RESET}")
+  // Get user menu choice
+  def getMenuChoice(maxOption: Int): Int = {
+    print(s"${CYAN}Enter your choice (1-$maxOption): ${RESET}")
+    try {
+      val choice = scala.io.StdIn.readLine().trim.toInt
+      if (choice >= 1 && choice <= maxOption) choice
+      else {
+        println(s"${RED}Invalid choice! Please enter a number between 1 and $maxOption.${RESET}")
+        getMenuChoice(maxOption)
+      }
+    } catch {
+      case _: Exception =>
+        println(s"${RED}Invalid input! Please enter a number.${RESET}")
+        getMenuChoice(maxOption)
     }
   }
 
-  // Get a valid letter input from user
-  def getLetterInput(): Option[Char] = {
-    print(s"${CYAN}Enter a letter: ${RESET}")
-    val input = scala.io.StdIn.readLine().trim
+  // Start a new game
+  def startNewGame(): Unit = {
+    displayGameModeMenu()
+    val mode = getMenuChoice(3)
 
-    if (input.length == 1 && input.head.isLetter) {
-      Some(input.head)
-    } else {
-      println(s"${RED}Invalid input! Please enter a single letter.${RESET}")
-      None
+    mode match {
+      case 1 => playSinglePlayer()
+      case 2 => playMultiplayer()
+      case 3 => // Return to main menu
     }
   }
 
-  // Main game loop
-  def playGame(initialWord: String): Unit = {
-    var state = GameState(
-      word = initialWord,
-      guessedLetters = Set.empty,
-      remainingAttempts = 6
-    )
+  // Single player mode
+  def playSinglePlayer(): Unit = {
+    println(s"\n${GREEN}=== SINGLE PLAYER MODE ===${RESET}")
+    val player = Player.createNewPlayer(1)
+    val word = WordList.getRandomWord()
+    
+    println(s"${YELLOW}A random word has been selected!${RESET}")
+    val won = GameEngine.playGame(word, player.name)
+    
+    // Update player stats (this will be saved to scoreboard later)
+    val updatedPlayer = player.addGameResult(won)
+    
+    // TODO: Save to scoreboard
+    println(s"\n${CYAN}Your stats: ${updatedPlayer.gamesPlayed} games played, ${updatedPlayer.gamesWon} won${RESET}")
+    
+    // Ask if they want to play again
+    pressEnterToContinue()
+  }
 
-    println(s"\n${GREEN}Game started! The word has ${initialWord.length} letters.${RESET}")
-
-    while (!state.isGameOver) {
-      displayGameState(state)
-
-      getLetterInput() match {
-        case Some(letter) =>
-          val (newState, message) = processGuess(state, letter)
-          state = newState
-          println(message)
-
-        case None =>
-        // Invalid input, continue loop
+  // Multiplayer mode
+  def playMultiplayer(): Unit = {
+    println(s"\n${GREEN}=== MULTIPLAYER MODE ===${RESET}")
+    
+    // Get Player 1 (word setter)
+    val player1 = Player.createNewPlayer(1)
+    
+    // Get Player 2 (guesser)
+    val player2 = Player.createNewPlayer(2)
+    
+    // Player 1 enters the word
+    println(s"\n${YELLOW}${player1.name}, enter a word for ${player2.name} to guess.${RESET}")
+    println(s"${RED}(Make sure ${player2.name} is not looking!)${RESET}")
+    
+    var word = ""
+    var validWord = false
+    
+    while (!validWord) {
+      print(s"${CYAN}Enter word (must be > 5 letters): ${RESET}")
+      word = scala.io.StdIn.readLine().trim.toLowerCase
+      
+      if (WordList.isValidWord(word)) {
+        validWord = true
+        // Clear screen to hide the word
+        println("\n" * 50)
+        println(s"${GREEN}Word accepted! ${player2.name}, get ready to guess!${RESET}")
+      } else {
+        println(s"${RED}Invalid word! Must be longer than 5 letters and contain only letters.${RESET}")
       }
     }
-
-    // Display final state
-    displayGameState(state)
-
-    // Display game result
-    if (state.isWordGuessed) {
-      println(s"${GREEN}╔════════════════════════════════════════╗${RESET}")
-      println(s"${GREEN}║   🎉 CONGRATULATIONS! YOU WON! 🎉    ║${RESET}")
-      println(s"${GREEN}╚════════════════════════════════════════╝${RESET}")
-      println(s"${YELLOW}The word was: ${state.word}${RESET}")
-    } else {
-      println(s"${RED}╔════════════════════════════════════════╗${RESET}")
-      println(s"${RED}║        💀 GAME OVER! YOU LOST! 💀      ║${RESET}")
-      println(s"${RED}╚════════════════════════════════════════╝${RESET}")
-      println(s"${YELLOW}The word was: ${state.word}${RESET}")
-    }
+    
+    // Player 2 plays the game
+    val won = GameEngine.playGame(word, player2.name)
+    
+    // Update player stats
+    val updatedPlayer2 = player2.addGameResult(won)
+    
+    // TODO: Save to scoreboard
+    println(s"\n${CYAN}${player2.name}'s stats: ${updatedPlayer2.gamesPlayed} games played, ${updatedPlayer2.gamesWon} won${RESET}")
+    
+    pressEnterToContinue()
   }
 
-  // Test function - will be replaced by your colleague's menu system
+  // Continue saved game (placeholder for now)
+  def continueSavedGame(): Unit = {
+    println(s"\n${YELLOW}=== CONTINUE SAVED GAME ===${RESET}")
+    println(s"${RED}Save/Load functionality coming soon!${RESET}")
+    // TODO: Implement load game from FileManager
+    pressEnterToContinue()
+  }
+
+  // View scoreboard (placeholder for now)
+  def viewScoreboard(): Unit = {
+    println(s"\n${YELLOW}=== SCOREBOARD ===${RESET}")
+    println(s"${RED}Scoreboard functionality coming soon!${RESET}")
+    // TODO: Load and display scoreboard from file
+    pressEnterToContinue()
+  }
+
+  // Helper function to pause and wait for user
+  def pressEnterToContinue(): Unit = {
+    print(s"\n${CYAN}Press ENTER to continue...${RESET}")
+    scala.io.StdIn.readLine()
+  }
+
+  // Main entry point
   def main(args: Array[String]): Unit = {
-    println(s"${BLUE}╔════════════════════════════════════════╗${RESET}")
-    println(s"${BLUE}║          WELCOME TO HANGMAN!           ║${RESET}")
-    println(s"${BLUE}╚════════════════════════════════════════╝${RESET}")
+    var running = true
 
-    // Sample words for testing (> 5 letters)
-    val sampleWords = Array("programming", "computer", "algorithm", "function", "variable")
-    val randomWord = sampleWords(scala.util.Random.nextInt(sampleWords.length))
+    while (running) {
+      displayMainMenu()
+      val choice = getMenuChoice(4)
 
-    playGame(randomWord)
+      choice match {
+        case 1 => startNewGame()
+        case 2 => continueSavedGame()
+        case 3 => viewScoreboard()
+        case 4 =>
+          println(s"\n${GREEN}Thanks for playing Hangman! Goodbye!${RESET}\n")
+          running = false
+      }
+    }
   }
 }
