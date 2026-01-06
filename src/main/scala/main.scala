@@ -13,7 +13,14 @@ object Main {
     println(s"${BLUE}╚═══════════════════════════════════════╝${RESET}")
     println("="*50)
     println(s"${CYAN}1.${RESET} Start New Game")
-    println(s"${CYAN}2.${RESET} Continue Saved Game")
+    
+    // Show if saved game exists
+    if (FileManager.hasSavedGame()) {
+      println(s"${CYAN}2.${RESET} Continue Saved Game ${GREEN}[Available]${RESET}")
+    } else {
+      println(s"${CYAN}2.${RESET} Continue Saved Game ${RED}[No Save Found]${RESET}")
+    }
+    
     println(s"${CYAN}3.${RESET} View Scoreboard")
     println(s"${CYAN}4.${RESET} Exit")
     println("="*50)
@@ -59,22 +66,50 @@ object Main {
     }
   }
 
+  // Get or create player from scoreboard
+  def getOrCreatePlayer(playerNumber: Int): Player = {
+    print(s"${CYAN}Enter name for Player $playerNumber: ${RESET}")
+    val name = scala.io.StdIn.readLine().trim
+    
+    if (name.isEmpty) {
+      println(s"${YELLOW}Name cannot be empty. Using default name.${RESET}")
+      Player(s"Player$playerNumber")
+    } else {
+      // Check if player exists in scoreboard
+      FileManager.getPlayer(name) match {
+        case Some(existingPlayer) =>
+          println(s"${GREEN}Welcome back, ${existingPlayer.name}!${RESET}")
+          println(s"${YELLOW}Your record: ${existingPlayer.gamesWon}/${existingPlayer.gamesPlayed} wins${RESET}")
+          existingPlayer
+        case None =>
+          println(s"${GREEN}New player registered: $name${RESET}")
+          Player(name)
+      }
+    }
+  }
+
   // Single player mode
   def playSinglePlayer(): Unit = {
     println(s"\n${GREEN}=== SINGLE PLAYER MODE ===${RESET}")
-    val player = Player.createNewPlayer(1)
+    val player = getOrCreatePlayer(1)
     val word = WordList.getRandomWord()
     
     println(s"${YELLOW}A random word has been selected!${RESET}")
-    val won = GameEngine.playGame(word, player.name)
     
-    // Update player stats (this will be saved to scoreboard later)
-    val updatedPlayer = player.addGameResult(won)
+    GameEngine.playGame(word, player.name) match {
+      case Some(won) =>
+        // Game finished (not saved)
+        val updatedPlayer = player.addGameResult(won)
+        FileManager.updatePlayerScore(updatedPlayer)
+        
+        println(s"\n${CYAN}=== YOUR STATS ===${RESET}")
+        updatedPlayer.displayStats()
+        
+      case None =>
+        // Game was saved
+        println(s"${YELLOW}Your progress has been saved. Continue from the main menu!${RESET}")
+    }
     
-    // TODO: Save to scoreboard
-    println(s"\n${CYAN}Your stats: ${updatedPlayer.gamesPlayed} games played, ${updatedPlayer.gamesWon} won${RESET}")
-    
-    // Ask if they want to play again
     pressEnterToContinue()
   }
 
@@ -83,10 +118,10 @@ object Main {
     println(s"\n${GREEN}=== MULTIPLAYER MODE ===${RESET}")
     
     // Get Player 1 (word setter)
-    val player1 = Player.createNewPlayer(1)
+    val player1 = getOrCreatePlayer(1)
     
     // Get Player 2 (guesser)
-    val player2 = Player.createNewPlayer(2)
+    val player2 = getOrCreatePlayer(2)
     
     // Player 1 enters the word
     println(s"\n${YELLOW}${player1.name}, enter a word for ${player2.name} to guess.${RESET}")
@@ -110,30 +145,68 @@ object Main {
     }
     
     // Player 2 plays the game
-    val won = GameEngine.playGame(word, player2.name)
-    
-    // Update player stats
-    val updatedPlayer2 = player2.addGameResult(won)
-    
-    // TODO: Save to scoreboard
-    println(s"\n${CYAN}${player2.name}'s stats: ${updatedPlayer2.gamesPlayed} games played, ${updatedPlayer2.gamesWon} won${RESET}")
+    GameEngine.playGame(word, player2.name) match {
+      case Some(won) =>
+        // Game finished
+        val updatedPlayer2 = player2.addGameResult(won)
+        FileManager.updatePlayerScore(updatedPlayer2)
+        
+        println(s"\n${CYAN}=== ${player2.name}'S STATS ===${RESET}")
+        updatedPlayer2.displayStats()
+        
+      case None =>
+        // Game was saved
+        println(s"${YELLOW}Game saved! ${player2.name} can continue later.${RESET}")
+    }
     
     pressEnterToContinue()
   }
 
-  // Continue saved game (placeholder for now)
+  // Continue saved game
   def continueSavedGame(): Unit = {
     println(s"\n${YELLOW}=== CONTINUE SAVED GAME ===${RESET}")
-    println(s"${RED}Save/Load functionality coming soon!${RESET}")
-    // TODO: Implement load game from FileManager
+    
+    if (!FileManager.hasSavedGame()) {
+      println(s"${RED}No saved game found!${RESET}")
+      pressEnterToContinue()
+      return
+    }
+    
+    // Load the player name BEFORE starting the game (because the save file gets deleted after game ends)
+    val playerNameOpt = FileManager.loadGame().map(_.playerName)
+    
+    GameEngine.continueSavedGame() match {
+      case Some(won) =>
+        // Game finished - update scoreboard
+        playerNameOpt match {
+          case Some(playerName) =>
+            FileManager.getPlayer(playerName) match {
+              case Some(player) =>
+                val updatedPlayer = player.addGameResult(won)
+                FileManager.updatePlayerScore(updatedPlayer)
+                println(s"\n${CYAN}=== UPDATED STATS ===${RESET}")
+                updatedPlayer.displayStats()
+              case None =>
+                // Player not in scoreboard yet
+                val newPlayer = Player(playerName).addGameResult(won)
+                FileManager.updatePlayerScore(newPlayer)
+                println(s"\n${CYAN}=== UPDATED STATS ===${RESET}")
+                newPlayer.displayStats()
+            }
+          case None =>
+            println(s"${RED}Error: Could not retrieve player information.${RESET}")
+        }
+        
+      case None =>
+        // Game was saved again or failed to load
+    }
+    
     pressEnterToContinue()
   }
 
-  // View scoreboard (placeholder for now)
+  // View scoreboard
   def viewScoreboard(): Unit = {
-    println(s"\n${YELLOW}=== SCOREBOARD ===${RESET}")
-    println(s"${RED}Scoreboard functionality coming soon!${RESET}")
-    // TODO: Load and display scoreboard from file
+    Scoreboard.displayScoreboard()
     pressEnterToContinue()
   }
 
@@ -156,7 +229,9 @@ object Main {
         case 2 => continueSavedGame()
         case 3 => viewScoreboard()
         case 4 =>
-          println(s"\n${GREEN}Thanks for playing Hangman! Goodbye!${RESET}\n")
+          println(s"\n${GREEN}╔═══════════════════════════════════════╗${RESET}")
+          println(s"${GREEN}║    Thanks for playing Hangman! 🎮     ║${RESET}")
+          println(s"${GREEN}╚═══════════════════════════════════════╝${RESET}\n")
           running = false
       }
     }

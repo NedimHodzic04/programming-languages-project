@@ -163,50 +163,24 @@ object GameEngine {
   }
 
   // Get a valid letter input from user
-  def getLetterInput(): Option[Char] = {
-    print(s"${CYAN}Enter a letter (or type 'save' to save game): ${RESET}")
+  def getLetterInput(): Either[String, Char] = {
+    print(s"${CYAN}Enter a letter (or type 'save' to save and quit): ${RESET}")
     val input = scala.io.StdIn.readLine().trim.toLowerCase
 
     if (input == "save") {
-      None // Signal to save game (we'll handle this in Main)
+      Left("save") // Signal to save game
     } else if (input.length == 1 && input.head.isLetter) {
-      Some(input.head)
+      Right(input.head) // Valid letter
     } else {
-      println(s"${RED}Invalid input! Please enter a single letter.${RESET}")
-      None
+      println(s"${RED}Invalid input! Please enter a single letter or 'save'.${RESET}")
+      Left("invalid") // Invalid input, continue loop
     }
   }
 
-  // Main game loop - returns true if player won, false if lost
-  def playGame(initialWord: String, playerName: String): Boolean = {
-    var state = GameState(
-      word = initialWord,
-      guessedLetters = Set.empty,
-      remainingAttempts = 6,
-      playerName = playerName
-    )
-
-    println(s"\n${GREEN}Game started! The word has ${initialWord.length} letters.${RESET}")
-
-    while (!state.isGameOver) {
-      displayGameState(state)
-
-      getLetterInput() match {
-        case Some(letter) =>
-          val (newState, message) = processGuess(state, letter)
-          state = newState
-          println(message)
-
-        case None =>
-          // TODO: Save game functionality will go here
-          println(s"${YELLOW}Save functionality coming soon!${RESET}")
-      }
-    }
-
-    // Display final state
+  // Helper function to display end game and return result
+  private def displayEndGame(state: GameState): Boolean = {
     displayGameState(state)
-
-    // Display game result
+    
     if (state.isWordGuessed) {
       println(s"${GREEN}╔═══════════════════════════════════════╗${RESET}")
       println(s"${GREEN}║   🎉 CONGRATULATIONS! YOU WON! 🎉    ║${RESET}")
@@ -219,6 +193,86 @@ object GameEngine {
       println(s"${RED}╚═══════════════════════════════════════╝${RESET}")
       println(s"${YELLOW}The word was: ${state.word}${RESET}")
       false // Player lost
+    }
+  }
+
+  // Main game loop - returns Option[Boolean]: Some(true) if won, Some(false) if lost, None if saved
+  def playGame(initialWord: String, playerName: String): Option[Boolean] = {
+    var state = GameState(
+      word = initialWord,
+      guessedLetters = Set.empty,
+      remainingAttempts = 6,
+      playerName = playerName
+    )
+
+    println(s"\n${GREEN}Game started! The word has ${initialWord.length} letters.${RESET}")
+    println(s"${YELLOW}Tip: Type 'save' at any time to save your progress and quit.${RESET}")
+
+    while (!state.isGameOver) {
+      displayGameState(state)
+
+      getLetterInput() match {
+        case Right(letter) =>
+          val (newState, message) = processGuess(state, letter)
+          state = newState
+          println(message)
+
+        case Left("save") =>
+          // Save the game
+          if (FileManager.saveGame(state)) {
+            println(s"${GREEN}Game saved! You can continue later from the main menu.${RESET}")
+            return None // Game was saved, not finished
+          } else {
+            println(s"${RED}Failed to save game. Continuing...${RESET}")
+          }
+
+        case Left(_) =>
+          // Invalid input, continue loop
+      }
+    }
+
+    // Display final result using helper function
+    Some(displayEndGame(state))
+  }
+
+  // Continue a saved game
+  def continueSavedGame(): Option[Boolean] = {
+    FileManager.loadGame() match {
+      case Some(savedState) =>
+        println(s"\n${GREEN}Resuming saved game for ${savedState.playerName}...${RESET}")
+        println(s"${YELLOW}Word length: ${savedState.word.length} letters${RESET}")
+        println(s"${YELLOW}Progress: ${savedState.getWordDisplay}${RESET}")
+        
+        // Continue the game loop with saved state
+        var state = savedState
+
+        while (!state.isGameOver) {
+          displayGameState(state)
+
+          getLetterInput() match {
+            case Right(letter) =>
+              val (newState, message) = processGuess(state, letter)
+              state = newState
+              println(message)
+
+            case Left("save") =>
+              if (FileManager.saveGame(state)) {
+                println(s"${GREEN}Game saved!${RESET}")
+                return None
+              }
+
+            case Left(_) =>
+              // Invalid input, continue
+          }
+        }
+
+        // Game finished - delete save file and display result
+        FileManager.deleteSaveFile()
+        Some(displayEndGame(state))
+
+      case None =>
+        println(s"${RED}No saved game found or failed to load.${RESET}")
+        None
     }
   }
 }
